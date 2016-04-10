@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Healthcare coverage visualization </title>
+  <script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+  <style type="text/css">
+    svg {
+      font: 10px sans-serif;
+      shape-rendering: crispEdges;
+    }
+
+    .axis path,
+    .axis line {
+      fill: none;
+      stroke: black;
+      shape-rendering: crispEdges;
+    }
+
+    path.domain {
+      stroke: none;
+    }
+
+    .y .tick line {
+      stroke: #ddd;
+    }
+
+    .title {
+    text-align: center;
+    margin-top:15px;
+    margin-bottom: 15px;
+    font-weight: bold;
+    font-size:150%;
+    }
+
+    .subtitle {
+    text-align: center;
+    margin-top:15px;
+    margin-bottom: 15px;
+    font-weight: bold;
+    font-size:110%;
+    }
+
+    .source {
+    text-align: center;
+    margin-top: 5px;
+    margin-bottom: 5px;
+    font-size: 80%;
+    }
+
+
+  svg{
+      display: block;
+      margin: auto;
+  }
+
+
+  </style>
+</head>
+
+<body>
+
+<div class = "title"> Healthcare Coverage by County in Massachusetts, 2014</div>
+<div class = "subtitle">Percentage of population with/without healthcare</div>
+<div class = "source">Data source: American Community Survey, 2009-2014 Estimates<br>
+Code source: <a href = "http://duspviz.mit.edu/d3-workshop/examples/session1/d3_chart12_example.html/">Stacked Bar Chart</a> by Mike Foster</div>
+
+<div id = "canvas"></div>
+
+	<script>
+		var formatPercent = d3.format(".0%");
+
+		//Loading data
+		var Data = [];
+
+    	d3.csv("/data/MA_healthcare_2014.csv", function(d) {
+		return {
+			county: d.name,
+			no_HC: +d.perc_no_hc,
+			HC: +d.perc_hc
+			};
+		}, function(error, rows) {
+			data = rows;
+			console.log(data);
+			createVisualization();
+		});
+
+	function createVisualization() {
+		//Setting up SVG
+		var margin = {top: 20, right: 20, bottom: 150, left: 20};
+	    var w = 900 - margin.left - margin.right;
+	    var h = 400 - margin.top - margin.bottom;
+
+	    // get length of Array
+		var arrayLength = data.length; // length of dataset
+		var x_axisLength = 850; // length of x-axis in our layout
+		var y_axisLength = 300; // length of y-axis in our layout
+
+
+		var svg = d3.select("#canvas")
+		    .append("svg")
+		    .attr("width", w + margin.left + margin.right)
+		    .attr("height", h + margin.top + margin.bottom)
+		  	.append("g")
+        	.attr("transform", "translate(" + margin.left + "," + margin.top + ")")
+
+
+	    // Transpose the data into layers
+		var dataset = d3.layout.stack()(["no_HC", "HC"].map(function(Data) {
+			return data.map(function(d) {
+				return {
+					x: d.county, 
+					y: +d[Data]
+				};
+			});
+		}));
+
+		var x = d3.scale.ordinal()
+    .domain(data.map(function(d) { return d.county; }))
+    .rangeBands([0, w]);
+
+
+    var y = d3.scale.linear()
+     .rangeRound([h, 0]);
+
+
+		var yScale = d3.scale.linear()
+			.domain([0, d3.max(dataset, function(d) {
+				return d3.max(d, function(d) {
+					return d.y0 + d.y;
+				}); 
+			})])
+			.range([h, 0]);
+
+		var colors = ["#eb4457", "#0080ff"];
+
+	    // Create groups for each series, rect elements for each segment 
+		var groups = svg.selectAll("g.county")
+			.data(dataset)
+			.enter().append("g")
+			.attr("class", "county")
+			.style("fill", function(d, i) { return colors[i]; });
+
+		var rect = groups.selectAll("rect")
+			.data(function(d) { return d; })
+			.enter()
+			.append("rect")
+			.attr("x", function(d,i) {
+				return i * (x_axisLength/arrayLength) + 30; 
+			})
+			.attr("y", function(d) { return yScale(d.y0 + d.y); })
+			.attr("height", function(d) { return yScale(d.y0) - yScale(d.y0 + d.y); })
+			.attr("width", (x_axisLength/arrayLength) - 1)
+			.on("mouseover", function() {
+				tooltip.style("display", null);
+			})
+			.on("mousemove", function(d) {
+				var xPosition = d3.mouse(this)[0] - 15;
+				var yPosition = d3.mouse(this)[1] - 25;
+				tooltip.attr("transform", "translate(" + xPosition + "," + yPosition + ")");
+				tooltip.select("text").text(d.x + ": " + formatPercent(d.y));
+			})
+			.on("mouseout", function() {
+				tooltip.style("display", "none");
+			});
+
+		
+		// Prep the tooltip bits, initial display is hidden
+		var tooltip = svg.append("g")
+			.attr("class", "tooltip")
+			.style("display", "none");
+	    
+		tooltip.append("text")
+			.attr("x", 15)
+			.attr("dy", "1.2em")
+			.style("text-anchor", "middle")
+			.attr("font-size", "12px");
+
+     // Define and draw axes
+    
+    var xAxis = d3.svg.axis()
+        .scale(x)
+        .orient("bottom")
+        .tickSize(0, 0);
+
+    var yAxis = d3.svg.axis()
+        .scale(y)
+        .orient("left")
+        .tickFormat(formatPercent);
+
+    svg.append("g")
+        .attr("class", "x axis")
+        .attr("transform", "translate(-20," + (h - margin.top+15) + ")") 
+        .call(xAxis)
+        .selectAll("text")
+        	.style("text-anchor", "end")
+        	.attr("x", margin.left)
+        	.attr("y", h-margin.bottom-10)
+            .attr("dx", "-.7em")
+            .attr("dy", "-1.4em")
+            .attr("transform", "rotate(-65)" );
+
+
+    svg.append("g")
+        .attr("class", "y axis")
+        .attr("transform", "translate(" + margin.left + ",0)")
+        .call(yAxis);
+
+
+    //Legend
+    var legend = d3.select("#legend")
+       legend = svg.selectAll(".legend")
+      .data(colors)
+      .enter().append("g")
+      .attr("class", "legend")
+      .attr("transform", function(d, i) { return "translate(" + i * 100 + ", 110)"; });
+
+    legend.append("rect")
+      .attr("x", w/2-margin.left)
+      .attr("y", 200)
+      .attr("width", 18)
+      .attr("height", 18)
+      .style("fill", function(d, i) {return colors.slice().reverse()[i];});
+
+    legend.append("text")
+      .attr("x", w/2-margin.left-20)
+      .attr("y", 200)
+      .attr("dy", "3em")
+      .style("text-anchor", "start")
+      .text(function(d, i) { 
+      switch (i) {
+        case 0: return "With Healthcare";
+        case 1: return "No Healthcare";
+      }
+    });
+
+
+	}
+</script>	
+
+</body>
+</html>
